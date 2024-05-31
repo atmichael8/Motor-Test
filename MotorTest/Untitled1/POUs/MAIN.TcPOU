@@ -3,6 +3,8 @@
   <POU Name="MAIN" Id="{3cca0f7b-1c22-4553-a492-10a9c50dc7a8}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 
+// MOTOR WITH LIGHT AND BUTTON BRANCH
+
 VAR
 	motor : FB_XenaxAxisForceFeedback;
 	motorSequence : ST_MOTION_PARAMS;
