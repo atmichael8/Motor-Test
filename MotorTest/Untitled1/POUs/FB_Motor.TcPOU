@@ -1,0 +1,132 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_Motor" Id="{c547f712-1e26-4765-80bd-73a5ca39fd11}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Motor
+
+VAR
+	aInputTargets : ARRAY[1..10] OF INT;	
+
+	ThisMotor : FB_XenaxAxisForceFeedback;
+	motorParameters : ST_MOTION_PARAMS;
+	
+	// Movement states for the motor
+	enumStates : (INITIALIZE_VALUES, INITIALIZE, FETCH, MOVING, WAIT, GET_NEXT_TARGET, MOVE_TO_TARGET);
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+mStates(); // keep running through states
+// ^^ could have manager to have a stack to follow commands
+// but for this purpose, its ok]]></ST>
+    </Implementation>
+    <Method Name="mInitialize" Id="{d0d87515-1fa6-436d-af8c-2f33466bfee2}">
+      <Declaration><![CDATA[METHOD mInitialize : BOOL
+
+VAR_INPUT
+	aInputArray : ARRAY[1..10] OF INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[aInputTargets := aInputArray;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mStates" Id="{1dc201df-a37e-41a0-883b-52165c62b3e7}">
+      <Declaration><![CDATA[METHOD mStates : BOOL
+
+VAR_INPUT
+END_VAR
+
+VAR_INST
+	// Track index location of input array & value at current index of input array
+	nTargetIndex : INT := 1;
+	nTargetValue : INT := 0;
+	
+	// Wait timer between move commands
+	tonWaitTimer : TON := (PT := T#500MS);
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Thismotor(usiRefernceDirection := INT_TO_USINT(E_JS_MC_REF_MODE.Positive));
+
+CASE enumStates OF
+	INITIALIZE_VALUES:
+		motorParameters.TargetPos := 0;
+		motorParameters.Jerk := 20000;
+		motorParameters.TargetAccel := 2000;
+		motorParameters.TargetDecel := 2000;
+		motorParameters.TargetVel := 1000;
+		enumStates := INITIALIZE;
+		
+		
+	INITIALIZE:
+		ThisMotor.Initialize(TRUE);
+		IF ThisMotor.DidInitialize THEN
+			nTargetValue := 0;
+			enumStates := MOVE_TO_TARGET;
+		END_IF
+		
+		
+	MOVING:
+		ThisMotor.MoveAbs(Execute := TRUE, MotionParams := motorParameters);
+		IF ThisMotor.DidMoveAbs THEN
+			ThisMotor.MoveAbs(Execute := FALSE, MotionParams := motorParameters);
+			enumStates := WAIT;
+		END_IF
+		
+		
+	WAIT:
+		tonWaitTimer(IN := TRUE);
+		
+		IF tonWaitTimer.Q THEN
+			tonWaitTimer(IN := FALSE);
+			enumStates := GET_NEXT_TARGET;
+		END_IF
+
+		
+	GET_NEXT_TARGET:
+		
+		IF nTargetIndex + 1 > UINT_TO_INT(SIZEOF(aInputTargets)/2) THEN // divide by 2 since the array type is of int (2 bytes per entry)
+			nTargetIndex := 1;
+		END_IF
+
+		nTargetValue := aInputTargets[nTargetIndex];
+		
+		nTargetIndex := nTargetIndex + 1;
+		
+		enumStates := MOVE_TO_TARGET;
+		
+		
+	MOVE_TO_TARGET:
+		motorParameters.TargetPos := nTargetValue;
+		enumStates := MOVING;
+		
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Motor">
+      <LineId Id="32" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="33" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Motor.mInitialize">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Motor.mStates">
+      <LineId Id="63" Count="1" />
+      <LineId Id="6" Count="7" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="14" Count="6" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="21" Count="6" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="28" Count="7" />
+      <LineId Id="41" Count="12" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="57" Count="2" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

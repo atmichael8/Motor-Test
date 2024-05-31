@@ -67,6 +67,9 @@
     <Compile Include="POUs\FB_AxisBase.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\FB_Motor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="POUs\FB_XenaxAxisForceFeedback.TcPOU">
       <SubType>Code</SubType>
     </Compile>

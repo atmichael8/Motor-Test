@@ -3,165 +3,28 @@
   <POU Name="MAIN" Id="{3cca0f7b-1c22-4553-a492-10a9c50dc7a8}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 
-VAR
-	motor : FB_XenaxAxisForceFeedback;
-	motorSequence : ST_MOTION_PARAMS;
-	
-	initialSetup : BOOL := TRUE;
-	
-	justAStep : BOOL := TRUE;
-	
-	
-	enumStates : (INITIALIZE_VALUES, INITIALIZE, FETCH, MOVING, WAIT, GET_NEXT_TARGET, MOVE_TO_TARGET);
-	
+// MOTOR WITH LIGHT AND BUTTON BRANCH
+
+VAR	
+	// array to be passed to the FB_Motor
 	aTargets : ARRAY[1..10] OF INT := [0, 360, 720, 0, 720, -720, 0, -360, 360, 0];
-	nTargetIndex : INT := 1;
-	nTargetValue : INT := 0;
 	
-	tonWaitTimer : TON := (PT := T#500MS);
+	motor : FB_Motor;
 	
-	// could do array to track state number, better for scalability
-	//aMoveState : ARRAY[1..4] OF enumStates := [=(MOVE1, MOVE2, MOVE3, MOVE4);
-	//nMoveState : INT := 1;
-	dbg : INT;
-	
-	
-END_VAR
-]]></Declaration>
+	init : BOOL := TRUE;
+END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[motor(usiRefernceDirection := INT_TO_USINT(E_JS_MC_REF_MODE.Positive));
-
-CASE enumStates OF
-	INITIALIZE_VALUES:
-		motorSequence.TargetPos := 0;
-		motorSequence.Jerk := 20000;
-		motorSequence.TargetAccel := 2000;
-		motorSequence.TargetDecel := 2000;
-		motorSequence.TargetVel := 1000;
-		enumStates := INITIALIZE;
-		
-	INITIALIZE:
-		motor.Initialize(TRUE);
-		IF motor.DidInitialize THEN
-			nTargetValue := 0;
-			enumStates := MOVE_TO_TARGET;
-		END_IF
-		
-	MOVING:
-		motor.MoveAbs(Execute := TRUE, MotionParams := motorSequence);
-		IF motor.DidMoveAbs THEN
-			motor.MoveAbs(Execute := FALSE, MotionParams := motorSequence);
-			enumStates := WAIT;
-		END_IF
-		
-	WAIT:
-		tonWaitTimer(IN := TRUE);
-		
-		IF tonWaitTimer.Q THEN
-			tonWaitTimer(IN := FALSE);
-			enumStates := GET_NEXT_TARGET;
-		END_IF
-		// wait code here
-		// if time elapsed then go to next state
-		// after waiting the duration the if statement is triggered
-		// inside the if statement can increment the moveState variable
-		
-		//enumStates := GET_NEXT_TARGET;
-		
-	GET_NEXT_TARGET:
-		dbg := UINT_TO_INT(SIZEOF(aTargets)/2); // divide by 2 since the array type is of int (2 bytes per entry)
-		IF nTargetIndex + 1 > UINT_TO_INT(SIZEOF(aTargets)/2) THEN // divide by 2 since the array type is of int (2 bytes per entry)
-			nTargetIndex := 1;
-		END_IF
-
-		nTargetValue := aTargets[nTargetIndex];
-		
-		nTargetIndex := nTargetIndex + 1;
-		
-		enumStates := MOVE_TO_TARGET;
-		
-	
-		
-	MOVE_TO_TARGET:
-		motorSequence.TargetPos := nTargetValue;
-		enumStates := MOVING;
-	
-		
-END_CASE
-
-
-(*
-IF initialSetup THEN
-	motor.Initialize(TRUE);
-	motorSequence.TargetPos := 10000;
-	//motorSequence.TargetDistance := 50000;
-	motorSequence.Jerk := 20000;
-	motorSequence.TargetAccel := 2000;
-	motorSequence.TargetDecel := 2000;
-	motorSequence.TargetVel := 1000;
-	
-	IF motor.DidInitialize THEN
-			initialSetup := FALSE;
-	END_IF
-
-ELSE
-	motor.MoveAbs(Execute := TRUE, MotionParams := motorSequence);
-
-	IF motor.DidMoveAbs THEN
-		motor.MoveAbs(Execute := FALSE, MotionParams := motorSequence);
-	END_IF
-	
+      <ST><![CDATA[IF init THEN
+	motor.mInitialize(aInputArray := aTargets);
+	init := FALSE;
 END_IF
-*)
 
+// Call the FB to run the motors functions
+motor.mStates();
 ]]></ST>
     </Implementation>
     <LineIds Name="MAIN">
-      <LineId Id="32" Count="0" />
-      <LineId Id="57" Count="0" />
-      <LineId Id="56" Count="0" />
-      <LineId Id="72" Count="0" />
-      <LineId Id="76" Count="3" />
-      <LineId Id="74" Count="0" />
-      <LineId Id="80" Count="0" />
-      <LineId Id="73" Count="0" />
-      <LineId Id="58" Count="0" />
-      <LineId Id="61" Count="0" />
-      <LineId Id="70" Count="0" />
-      <LineId Id="217" Count="0" />
-      <LineId Id="71" Count="0" />
-      <LineId Id="69" Count="0" />
-      <LineId Id="81" Count="1" />
-      <LineId Id="115" Count="0" />
-      <LineId Id="85" Count="2" />
-      <LineId Id="84" Count="0" />
-      <LineId Id="88" Count="1" />
-      <LineId Id="210" Count="3" />
-      <LineId Id="215" Count="0" />
-      <LineId Id="214" Count="0" />
-      <LineId Id="90" Count="1" />
-      <LineId Id="99" Count="1" />
-      <LineId Id="216" Count="0" />
-      <LineId Id="204" Count="0" />
-      <LineId Id="186" Count="0" />
-      <LineId Id="205" Count="0" />
-      <LineId Id="219" Count="0" />
-      <LineId Id="103" Count="2" />
-      <LineId Id="200" Count="0" />
-      <LineId Id="101" Count="0" />
-      <LineId Id="202" Count="1" />
-      <LineId Id="206" Count="1" />
-      <LineId Id="185" Count="0" />
-      <LineId Id="106" Count="0" />
-      <LineId Id="188" Count="0" />
-      <LineId Id="83" Count="0" />
-      <LineId Id="114" Count="0" />
-      <LineId Id="120" Count="0" />
-      <LineId Id="108" Count="0" />
-      <LineId Id="60" Count="0" />
-      <LineId Id="59" Count="0" />
-      <LineId Id="127" Count="23" />
-      <LineId Id="126" Count="0" />
+      <LineId Id="255" Count="5" />
       <LineId Id="39" Count="0" />
       <LineId Id="37" Count="0" />
     </LineIds>
