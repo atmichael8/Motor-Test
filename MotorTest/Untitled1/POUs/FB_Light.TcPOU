@@ -1,0 +1,230 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_Light" Id="{3343f800-a989-4948-9ef8-705ba864a91b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Light
+
+VAR
+	bColor1 AT %Q* : BYTE := 1;
+	bColor2 AT %Q* : BYTE := 0;
+	bFlashRate AT %Q* : BYTE := 1;
+	bColor1Intensity AT %Q* : BYTE := 1;
+	bColor2Intensity AT %Q* : BYTE := 1;
+	bAudibleMode AT %Q* : BYTE := 0;
+	bAnimationMode AT %Q* : BYTE := 1;
+	bRotationalMode AT %Q* : BYTE := 0;
+
+	tonTimerDelay1 : TON := (PT := T#500MS);
+	tonTimerDelay2 : TON := (PT := T#500MS);
+	
+	nColorIndex : BYTE := 0;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="mActivate" Id="{e5387f86-92eb-4bf1-b863-10dd15db2427}">
+      <Declaration><![CDATA[METHOD mActivate : BOOL
+
+VAR_INPUT
+	inputVariable : BOOL;
+END_VAR
+
+VAR_INST
+	localVar : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[localVar := inputVariable;
+
+IF localVar THEN
+	bAnimationMode := 1;
+ELSE
+	bAnimationMode := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mCheckStatus" Id="{839dd1cb-c416-4d9d-be4a-9570ed6c2e95}">
+      <Declaration><![CDATA[METHOD mCheckStatus : BOOL
+VAR_INPUT
+	bInputStatus : BOOL;
+END_VAR
+
+
+
+VAR
+	tonTimeDelay : TON := (PT := T#4S);
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bInputStatus THEN
+	bColor1 := 0;
+ELSE
+	bColor1 := 1;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mFillArray" Id="{7e5dd064-c880-4db2-bb4a-e034369fae43}">
+      <Declaration><![CDATA[METHOD mFillArray : BOOL
+
+VAR_INPUT
+	//
+END_VAR
+
+VAR
+	nIndex : INT := 1;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+//FOR nIndex := 1 TO SIZEOF(aColors) DO
+	//aColors[nIndex] := nIndex;
+//END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mLightDelay" Id="{79d56d5c-f543-437f-819f-536c881341e0}">
+      <Declaration><![CDATA[METHOD mLightDelay : BOOL
+
+VAR_INPUT
+	bInputState : BOOL; // case reset button from input
+END_VAR
+
+VAR_INST
+	nCaseState : INT := 1;
+	trigger : R_TRIG;
+	
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE nCaseState OF
+	1:
+		tonTimerDelay1(IN := TRUE);	
+		IF tonTimerDelay1.Q THEN
+			bColor1 := 1; // RED
+			tonTimerDelay1(IN := FALSE);
+			nCaseState := 2;
+		END_IF
+
+	2:
+		tonTimerDelay2(IN := TRUE);
+		IF tonTimerDelay2.Q THEN
+			bColor1 := 0; // GREEN
+			tonTimerDelay2(IN := FALSE);
+			nCaseState := 1;
+		END_IF
+	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mLightSpectrum" Id="{00b33b1f-8844-4e0a-b32f-528ac7697605}">
+      <Declaration><![CDATA[METHOD mLightSpectrum : BOOL
+
+VAR_INPUT
+	//bInputState : BOOL; // case reset button from input
+END_VAR
+
+VAR_INST
+	nCaseState : INT := 1;
+	trigger : R_TRIG;
+	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE nCaseState OF
+	1:
+		tonTimerDelay1(IN := TRUE);	
+		IF tonTimerDelay1.Q THEN
+			IF nColorIndex > 12 THEN
+				nColorIndex := 0;
+			END_IF
+			bColor1 := nColorIndex;
+			nColorIndex := nColorIndex + 1;
+			
+			tonTimerDelay1(IN := FALSE);
+			nCaseState := 2;
+		END_IF
+
+	2:
+		tonTimerDelay2(IN := TRUE);
+		IF tonTimerDelay2.Q THEN
+			IF nColorIndex > 12 THEN
+				nColorIndex := 0;
+			END_IF
+			bColor1 := nColorIndex;
+			nColorIndex := nColorIndex + 1;
+
+			tonTimerDelay2(IN := FALSE);
+			nCaseState := 1;
+		END_IF
+	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mSetAnimation" Id="{01860b90-909a-43c9-9728-9496cf596de0}">
+      <Declaration><![CDATA[METHOD mSetAnimation : BOOL
+
+VAR_INPUT
+	bInputValue : BYTE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bAnimationMode := bInputValue;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mSetColor" Id="{d7d90027-3049-4483-8c5e-d6bc90596754}">
+      <Declaration><![CDATA[METHOD mSetColor : BOOL
+
+VAR_INPUT
+	nInputNumber : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+bColor1 := INT_TO_BYTE(nInputNumber);]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Light">
+      <LineId Id="38" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Light.mActivate">
+      <LineId Id="5" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="15" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Light.mCheckStatus">
+      <LineId Id="63" Count="3" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="26" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Light.mFillArray">
+      <LineId Id="14" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="15" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Light.mLightDelay">
+      <LineId Id="186" Count="16" />
+      <LineId Id="140" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Light.mLightSpectrum">
+      <LineId Id="47" Count="3" />
+      <LineId Id="52" Count="12" />
+      <LineId Id="66" Count="4" />
+      <LineId Id="72" Count="4" />
+      <LineId Id="45" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Light.mSetAnimation">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Light.mSetColor">
+      <LineId Id="8" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

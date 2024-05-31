@@ -10,15 +10,68 @@ VAR
 	motorParameters : ST_MOTION_PARAMS;
 	
 	// Movement states for the motor
-	enumStates : (INITIALIZE_VALUES, INITIALIZE, FETCH, MOVING, WAIT, GET_NEXT_TARGET, MOVE_TO_TARGET);
+	enumStates : (INITIALIZE_VALUES, INITIALIZE, MOVING, WAIT, GET_NEXT_TARGET, MOVE_TO_TARGET);
+	nEnumIndex : INT := 0;
+	aEnumStates : ARRAY[1..6] OF INT := [12, 1, 0, 2, 3, 6];
+	(*	
+		enumStates	| INITIALIZE_VALUES | INITIALIZE | MOVING | WAIT | GET_NEXT_TARGET | MOVE_TO_TARGET |
+		aEnumStates |          12		| 	  1		 |    0	  |   2  |        3		   |        6       |
+		Color		|		 white      |    red     |  green |orange|	   yellow      |      cyan		|
+	
+		The colors are parallel to the state the motor is in
+	*)
+	light : FB_Light;
+	button : FB_Button;
+	bButton : BOOL;
+	
+	tonLightFlashDelay : TON := (PT := T#600MS);
+	bFlashState : BOOL;
 	
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[
-mStates(); // keep running through states
+      <ST><![CDATA[bButton := button.byButtonInput; // set bool from the state of the button
+button.mButtonLight(); // light for the button if it is pressed
+
+IF bButton THEN
+	mStates(); // keep running through states
 // ^^ could have manager to have a stack to follow commands
-// but for this purpose, its ok]]></ST>
+// but for this purpose, its ok
+
+ELSE
+	// set the color to red
+	light.mSetColor(nInputNumber := 1);
+	
+	IF bFlashState THEN // light is on
+		tonLightFlashDelay(IN := TRUE);
+		// check if time has elapsed
+		IF tonLightFlashDelay.Q THEN
+			// turn the light off
+			light.mSetAnimation(0);
+			// set bFlashState to FALSE
+			bFlashState := FALSE;
+			// reset timer
+			tonLightFlashDelay(IN := FALSE);
+		END_IF
+		
+	ELSE // light is off
+		tonLightFlashDelay(IN := TRUE);
+		// check if time has elapsed
+		IF tonLightFlashDelay.Q THEN
+			// turn the light on
+			light.mSetAnimation(1);
+			// set bFlashState to TRUE
+			bFlashState := TRUE;
+			// reset timer
+			tonLightFlashDelay(IN := FALSE);
+		END_IF
+	
+	END_IF
+	
+
+END_IF
+
+]]></ST>
     </Implementation>
     <Method Name="mInitialize" Id="{d0d87515-1fa6-436d-af8c-2f33466bfee2}">
       <Declaration><![CDATA[METHOD mInitialize : BOOL
@@ -42,15 +95,20 @@ VAR_INST
 	nTargetIndex : INT := 1;
 	nTargetValue : INT := 0;
 	
+	
 	// Wait timer between move commands
 	tonWaitTimer : TON := (PT := T#500MS);
 END_VAR
 ]]></Declaration>
       <Implementation>
         <ST><![CDATA[Thismotor(usiRefernceDirection := INT_TO_USINT(E_JS_MC_REF_MODE.Positive));
+light.mSetAnimation(bInputValue := 1);
 
 CASE enumStates OF
 	INITIALIZE_VALUES:
+		nEnumIndex := 1;
+		light.mSetColor(nInputNumber := nEnumIndex);
+		
 		motorParameters.TargetPos := 0;
 		motorParameters.Jerk := 20000;
 		motorParameters.TargetAccel := 2000;
@@ -60,6 +118,9 @@ CASE enumStates OF
 		
 		
 	INITIALIZE:
+		nEnumIndex := 2;
+		light.mSetColor(nInputNumber := nEnumIndex);
+		
 		ThisMotor.Initialize(TRUE);
 		IF ThisMotor.DidInitialize THEN
 			nTargetValue := 0;
@@ -68,6 +129,9 @@ CASE enumStates OF
 		
 		
 	MOVING:
+		nEnumIndex := 3;
+		light.mSetColor(nInputNumber := nEnumIndex);
+		
 		ThisMotor.MoveAbs(Execute := TRUE, MotionParams := motorParameters);
 		IF ThisMotor.DidMoveAbs THEN
 			ThisMotor.MoveAbs(Execute := FALSE, MotionParams := motorParameters);
@@ -76,6 +140,9 @@ CASE enumStates OF
 		
 		
 	WAIT:
+		nEnumIndex := 4;
+		light.mSetColor(nInputNumber := nEnumIndex);
+		
 		tonWaitTimer(IN := TRUE);
 		
 		IF tonWaitTimer.Q THEN
@@ -85,6 +152,8 @@ CASE enumStates OF
 
 		
 	GET_NEXT_TARGET:
+		nEnumIndex := 5;
+		light.mSetColor(nInputNumber := nEnumIndex);
 		
 		IF nTargetIndex + 1 > UINT_TO_INT(SIZEOF(aInputTargets)/2) THEN // divide by 2 since the array type is of int (2 bytes per entry)
 			nTargetIndex := 1;
@@ -98,6 +167,9 @@ CASE enumStates OF
 		
 		
 	MOVE_TO_TARGET:
+		nEnumIndex := 6;
+		light.mSetColor(nInputNumber := nEnumIndex);
+		
 		motorParameters.TargetPos := nTargetValue;
 		enumStates := MOVING;
 		
@@ -105,26 +177,65 @@ END_CASE]]></ST>
       </Implementation>
     </Method>
     <LineIds Name="FB_Motor">
+      <LineId Id="60" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="62" Count="0" />
       <LineId Id="32" Count="0" />
-      <LineId Id="9" Count="0" />
-      <LineId Id="33" Count="1" />
+      <LineId Id="66" Count="1" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="71" Count="2" />
+      <LineId Id="112" Count="1" />
+      <LineId Id="87" Count="1" />
+      <LineId Id="92" Count="2" />
+      <LineId Id="96" Count="4" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="103" Count="8" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="58" Count="0" />
     </LineIds>
     <LineIds Name="FB_Motor.mInitialize">
       <LineId Id="5" Count="0" />
     </LineIds>
     <LineIds Name="FB_Motor.mStates">
-      <LineId Id="63" Count="1" />
-      <LineId Id="6" Count="7" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="6" Count="1" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="100" Count="1" />
+      <LineId Id="8" Count="5" />
       <LineId Id="76" Count="0" />
-      <LineId Id="14" Count="6" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="102" Count="1" />
+      <LineId Id="16" Count="4" />
       <LineId Id="75" Count="0" />
-      <LineId Id="21" Count="6" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="104" Count="1" />
+      <LineId Id="23" Count="4" />
       <LineId Id="74" Count="0" />
-      <LineId Id="28" Count="7" />
-      <LineId Id="41" Count="12" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="106" Count="1" />
+      <LineId Id="30" Count="5" />
+      <LineId Id="41" Count="3" />
+      <LineId Id="108" Count="1" />
+      <LineId Id="45" Count="8" />
       <LineId Id="73" Count="0" />
       <LineId Id="54" Count="0" />
-      <LineId Id="57" Count="2" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="110" Count="1" />
+      <LineId Id="58" Count="1" />
       <LineId Id="61" Count="0" />
       <LineId Id="5" Count="0" />
     </LineIds>

@@ -10,6 +10,7 @@ VAR
 	aTargets : ARRAY[1..10] OF INT := [0, 360, 720, 0, 720, -720, 0, -360, 360, 0];
 	
 	motor : FB_Motor;
+	//light : FB_Light;
 	
 	init : BOOL := TRUE;
 END_VAR]]></Declaration>
@@ -20,12 +21,14 @@ END_VAR]]></Declaration>
 END_IF
 
 // Call the FB to run the motors functions
-motor.mStates();
+//motor.mStates();
+motor();
 ]]></ST>
     </Implementation>
     <LineIds Name="MAIN">
       <LineId Id="255" Count="5" />
       <LineId Id="39" Count="0" />
+      <LineId Id="262" Count="0" />
       <LineId Id="37" Count="0" />
     </LineIds>
   </POU>
