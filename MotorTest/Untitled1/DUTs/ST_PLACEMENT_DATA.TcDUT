@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_PLACEMENT_DATA" Id="{fa723f29-14ed-4227-9557-5799d951f496}">
+    <Declaration><![CDATA[TYPE ST_PLACEMENT_DATA :
+STRUCT
+	nRowCount			:	INT;
+	dnColumnCount		:	DINT;
+	nHoleCount			:	INT;
+	lrXPosition			:	LREAL;
+	lrYPosition			:	LREAL;
+	lrZPosition			:	LREAL;
+	lrZForce			:	LREAL;
+	lrXOffset			:	LREAL;
+	lrYOffset			:	LREAL;
+	lrInsertionFinalZPos:	LREAL;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

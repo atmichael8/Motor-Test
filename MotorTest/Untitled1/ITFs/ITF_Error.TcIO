@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <Itf Name="ITF_Error" Id="{5a56ba58-d4fe-0c79-372c-3dcfc76b6fd4}">
+    <Declaration><![CDATA[INTERFACE ITF_Error
+]]></Declaration>
+    <Property Name="pAckError" Id="{4105a70e-ef46-02e5-3e9a-6c5613957bf3}">
+      <Declaration><![CDATA[PROPERTY pAckError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c57bea28-f8a0-07ec-1924-bb3c9119f45a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{15dd27b6-ad00-0fce-0e53-a6af85408f92}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="pError" Id="{9b55ee16-8489-022b-3f94-208e2a04a549}">
+      <Declaration><![CDATA[PROPERTY pError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{7846a499-8690-0aa6-0ed1-b25710f6f7e6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{6ecd69c2-6fa9-0453-2cba-eaf6d10fc275}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="pErrorCode" Id="{83dab1d4-4699-0a08-0652-15adbb33cf23}">
+      <Declaration><![CDATA[PROPERTY pErrorCode : udint]]></Declaration>
+      <Get Name="Get" Id="{d4285aaa-37e4-07cb-18e2-cf05d2029a55}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{7e8c8cee-3ebb-0408-06be-a71ce8342521}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="pErrorDescription" Id="{4b340105-ef65-07bf-10dc-0503155ae2fe}">
+      <Declaration><![CDATA[PROPERTY pErrorDescription : T_MaxString]]></Declaration>
+      <Get Name="Get" Id="{d29cce07-4303-0606-248b-dae467ec173e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{50dac819-e7c6-0af3-1f2c-4f22fec71e45}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+      </Set>
+    </Property>
+    <ObjectProperties>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="UMLStereoTypeContainerObject">
+            <v n="IsType" t="UMLType">BaseArea</v>
+            <v n="Stereotype">""</v>
+            <d n="Stereotypes" t="Hashtable" />
+          </o>
+        </Data>
+        <TypeList>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="String">System.String</Type>
+          <Type n="UMLStereoTypeContainerObject">{30250973-b110-4e31-b562-c102e042dca4}</Type>
+          <Type n="UMLType">{0197b136-405a-42ee-bb27-fd08b621d0cf}</Type>
+        </TypeList>
+      </XmlArchive>
+    </ObjectProperties>
+  </Itf>
+</TcPlcObject>

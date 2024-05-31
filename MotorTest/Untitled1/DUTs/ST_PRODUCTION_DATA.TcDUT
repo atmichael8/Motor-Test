@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_PRODUCTION_DATA" Id="{2b69f7ca-079f-488f-858c-e3974c02c6a8}">
+    <Declaration><![CDATA[TYPE ST_PRODUCTION_DATA :
+STRUCT
+	udiPartCount :			UDINT;
+	rTenMinuteEfficiency :	REAL;
+	tsTime :				TIMESTRUCT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

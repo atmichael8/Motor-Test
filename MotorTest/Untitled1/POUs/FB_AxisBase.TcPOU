@@ -1,0 +1,1426 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_AxisBase" Id="{4a17e530-4f7d-097c-1a4a-722d4f693f67}" SpecialFunc="None">
+    <Declaration><![CDATA[(* 
+:WARNING: Still in development
+
+:Description: This function block should be used to control a basic servo axis.
+
+:Instructions for use:
+
+	- Update this function block every cycle
+	
+Version history:
+
++-------------+------------+----------------+--------+---------------+------------------------------------------+
+|Date         | Version    | created under  | Author |Checked By     | Remark                                   |
++=============+============+================+========+===============+==========================================+
+|10-11-2019   | 0.0.0      | V3.1.4022.28   | C.B.   |               | 								            |
++-------------+------------+----------------+--------+---------------+------------------------------------------+
+
+*)
+
+FUNCTION_BLOCK FB_AxisBase IMPLEMENTS ITF_Error
+VAR_INPUT
+END_VAR
+VAR
+(* Axis Ref *)
+	Axis:						AXIS_REF;
+(* FB's *)
+	fbMoveRel:					MC_MoveRelative;
+	fbMoveAbs1:				 	MC_MoveAbsolute;
+	fbMoveAbs2:					MC_MoveAbsolute;
+	fbMoveAbs3:					MC_MoveAbsolute;
+	fbMoveVelo:					MC_MoveVelocity;
+	fbMoveModulo:				MC_MoveModulo;
+	fbJog:						MC_Jog;
+	fbReset:		 			MC_Reset;
+	fbPower: 					MC_Power;
+	fbHalt:						MC_Halt;
+	fbHome:						MC_Home;
+	fbStop:						MC_Stop;
+(* Axis Monitoring *)
+	stParameterSet :			ST_AxisParameterSet;
+	fbReadParameterSet :		MC_ReadParameterSet;
+	fbWriteParameterSet :		MC_WriteParameter;
+(* Event based POUs/Vars*)
+	fbTcAlarm_Error:			FB_TcAlarm;
+	fbAlarmListener:			FB_AlarmListener;
+	stSeiEvents:				ST_Sei_Events;
+	fbTcEventLogger:			FB_TcEventLogger;
+	bAlarmCleared:				BOOL;
+(* Property Variables*)
+	bClearError:				BOOL;
+	bAckError:					BOOL;
+	bError:						BOOL;
+	udnErrorCode:				UDINT;
+	bBusy:						BOOL;
+	bActive:					BOOL;
+	bStatus:					BOOL;
+	sErrorDescription:			T_MaxString;
+	bAborted:					BOOL;
+	bDidRef:					BOOL;
+	bDidInitialize:				BOOL;
+	bDidMoveAbs:				BOOL;
+	bDidMoveMod:				BOOL;
+	bDidMoveRel:				BOOL;
+	bDidReset:					BOOL;
+	bDidPowerOff:				BOOL;
+	bDidPowerOn:				BOOL;
+	bDidMoveVelo:				BOOL;
+	bDidHalt:					BOOL;
+	bDidZero:					BOOL;
+	bErrorConfirmed:			BOOL;
+	
+(*Utility*)
+	rtrigExecute:				R_TRIG;
+END_VAR
+
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Calls all motion blocks cyclically
+CyclicComm();
+]]></ST>
+    </Implementation>
+    <Property Name="Aborted" Id="{69a661a0-0217-0df9-3193-362585f7e0ae}">
+      <Declaration><![CDATA[PROPERTY Aborted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e89e3695-9edb-066a-1c11-630981cbe124}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Aborted := bAborted;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ActAccl" Id="{90efb502-e413-0e46-2831-afb93cabcdc6}">
+      <Declaration><![CDATA[PROPERTY ActAccl : LREAL]]></Declaration>
+      <Get Name="Get" Id="{6bf69265-1f65-0c63-30eb-34390d330a4e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActAccl := Axis.NcToPlc.ActAcc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="Active" Id="{1d9dedf3-1c3b-02e5-39aa-18771068046b}">
+      <Declaration><![CDATA[PROPERTY Active : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0d394d28-d51d-078c-0f18-127c088429f6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Active := bActive;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ActPos" Id="{502328bc-9ae4-0fb5-24bf-18a80767cbee}">
+      <Declaration><![CDATA[PROPERTY ActPos : LREAL]]></Declaration>
+      <Get Name="Get" Id="{525aae2f-50fa-0cce-3e52-c9b08cdf756e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActPos := Axis.NcToPlc.ActPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ActVelo" Id="{4c1ec8fc-d8bb-0969-3bb8-53bace7ab714}">
+      <Declaration><![CDATA[PROPERTY ActVelo : LREAL]]></Declaration>
+      <Get Name="Get" Id="{356a8193-4c58-0646-3c14-6979cd798385}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActVelo := Axis.NcToPlc.ActVelo;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Axis_Jog" Id="{2bdd48a3-12a2-0092-1f73-980187de26b8}">
+      <Declaration><![CDATA[METHOD Axis_Jog 
+VAR_INPUT
+	JogParams: 				ST_JOG_PARAMS;
+END_VAR
+VAR_INST
+	State:	INT;
+	rtrigExecute :	R_TRIG;
+	Timer:				TON;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+	This method allows the user to enable an axis for jog. Jog modes are set depending on the user imput of jog distance
+*)
+ //Jog
+(*Incremental Jog*)
+	IF JogParams.Distance <> 0 THEN	
+		fbJog.Mode := MC_JOGMODE_INCHING; 
+		fbJog.Velocity := JogParams.TargetVel; 
+		fbJog.Position := JogParams.Distance; 
+		fbJog.JogForward := JogParams.JogForward; 
+		fbJog.JogBackwards := JogParams.JogBackward; 
+		fbJog.Acceleration := JogParams.TargetAccel; 
+		fbJog.Deceleration := JogParams.TargetDecel;
+		fbJog.Jerk := JogParams.Jerk; 
+	END_IF
+(*Continuous Jog*)
+	IF JogParams.Distance = 0  THEN
+		fbJog.Mode := MC_JOGMODE_CONTINOUS;
+		fbJog.Velocity := JogParams.TargetVel; 
+		fbJog.Position := JogParams.Distance; 
+		fbJog.JogForward := JogParams.JogForward; 
+		fbJog.JogBackwards := JogParams.JogBackward; 
+		fbJog.Acceleration := JogParams.TargetAccel; 
+		fbJog.Deceleration := JogParams.TargetDecel; 
+		fbJog.Jerk := JogParams.Jerk; 
+	END_IF
+
+	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Axis_MoveModulo" Id="{2fc0cae1-ce86-0939-1e97-3723c0a9e5b3}">
+      <Declaration><![CDATA[METHOD Axis_MoveModulo : BOOL
+VAR_INPUT
+	Execute:			BOOL;
+	MotionParams:		ST_MOTION_PARAMS;
+END_VAR
+VAR_INST
+	State :				INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);	
+CASE State OF
+	0: //Execute 
+		IF rtrigExecute.Q THEN
+			Axis_MoveModulo := FALSE;
+			bDidMoveMod := FALSE;
+			State := 10;
+		END_IF
+	10: //Move modulo 
+		fbMoveModulo.Position:= MotionParams.TargetPos; 
+		fbMoveModulo.Velocity:= MotionParams.TargetVel; 
+		fbMoveModulo.Acceleration:= MotionParams.TargetAccel; 
+		fbMoveModulo.Deceleration:= MotionParams.TargetDecel; 
+		fbMoveModulo.Jerk:= MotionParams.Jerk; 
+		fbMoveModulo.Direction:= MotionParams.Direction; 
+		fbMoveModulo.BufferMode:= MotionParams.BufferMode; 
+		fbMoveModulo.Execute:= TRUE;
+		IF fbMoveModulo.Done THEN
+			bDidMoveMod := TRUE;
+			fbMoveModulo.Execute := FALSE;
+			Axis_MoveModulo := TRUE;
+			State := 0;
+		END_IF
+END_CASE	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Axis_MoveRelative" Id="{325ca0ed-4909-0a88-0592-464803f28f4b}">
+      <Declaration><![CDATA[METHOD Axis_MoveRelative : BOOL
+VAR_INPUT
+	Execute:			BOOL;
+	MotionParams:		ST_MOTION_PARAMS;
+END_VAR
+VAR_INST
+	State :		INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF	
+	0: //Execute
+		IF rtrigExecute.Q THEN
+			Axis_MoveRelative := FALSE;
+			bDidMoveRel := FALSE;
+			State := 10;
+		END_IF
+	10: //Move relative
+			fbMoveRel.Execute:= TRUE;
+			fbMoveRel.Distance := MotionParams.TargetDistance;
+			fbMoveRel.Velocity:= MotionParams.TargetVel; 
+			fbMoveRel.Acceleration:= MotionParams.TargetAccel; 
+			fbMoveRel.Deceleration:= MotionParams.TargetDecel; 
+			fbMoveRel.Jerk:= MotionParams.Jerk; 
+		IF fbMoveRel.Done THEN
+			fbMoveRel.Execute := FALSE;
+			Axis_MoveRelative := TRUE;
+			bDidMoveRel := TRUE;
+			State := 0;
+		END_IF
+
+END_CASE	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Axis_PowerOff" Id="{daffc562-1390-049c-0f01-690a9db384a8}">
+      <Declaration><![CDATA[METHOD Axis_PowerOff : BOOL
+VAR_INPUT
+	Execute:	BOOL;
+END_VAR
+VAR_INST
+	State:	INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF
+	0: //Execute 
+		IF rtrigExecute.Q THEN
+			Axis_PowerOff := FALSE;
+			bDidPowerOff := FALSE;
+			bDidInitialize := FALSE;
+			State := 10;
+		END_IF	
+	10: //Power Off 
+		IF fbPower.Status THEN
+			fbPower.Enable:= FALSE;
+			fbPower.Enable_Positive:= FALSE;
+			fbPower.Enable_Negative:= FALSE; 
+			fbPower.Override:= 0;
+			Axis_PowerOff := FALSE;
+		ELSIF NOT fbPower.Status THEN
+			Axis_PowerOff := TRUE;
+			bDidPowerOff := TRUE;
+			State := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Axis_PowerOn" Id="{374ea16b-5fb9-01a2-3987-64dc54496fff}">
+      <Declaration><![CDATA[METHOD Axis_PowerOn : BOOL
+VAR_INPUT
+	Execute:	BOOL;
+END_VAR
+VAR_INST
+	State:	INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF
+	0:  //Exectue	
+		IF rtrigExecute.Q THEN
+			bDidPowerOn := FALSE;
+			Axis_PowerOn := FALSE;
+			State := 10;
+		END_IF
+		
+	10: //Enable
+		fbPower.Enable:= TRUE; 
+		fbPower.Enable_Positive:= TRUE; 
+		fbPower.Enable_Negative:= TRUE; 
+		fbPower.Override:= 100;
+		IF fbPower.Status THEN
+			Axis_PowerOn := TRUE;
+			bDidPowerOn := TRUE;
+			State := 0;
+		END_IF
+END_CASE
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Axis_Zero" Id="{b91791e9-bdfd-4f68-89b8-4dc19fc919c7}">
+      <Declaration><![CDATA[METHOD Axis_Zero : BOOL
+VAR_INPUT
+	Execute:			BOOL;
+	MotionParams:		ST_MOTION_PARAMS;
+END_VAR
+VAR_INST
+	State :				INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);	
+CASE State OF
+	0: //Execute 
+		IF rtrigExecute.Q THEN
+			Axis_Zero := FALSE;
+			bDidZero := FALSE;
+			State := 10;
+		END_IF
+	10: //Home 
+		fbHome.Position:= 0; 
+		fbHome.HomingMode := MC_HomingMode.MC_Direct;
+		fbHome.Execute := TRUE;
+		IF fbHome.Done THEN
+			bDidZero := TRUE;
+			fbHome.Execute := FALSE;
+			Axis_Zero := TRUE;
+			bDidZero := TRUE;
+			State := 0;
+		END_IF
+END_CASE	]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="Busy" Id="{c92788e8-6a24-05de-2db3-20a194540f27}">
+      <Declaration><![CDATA[PROPERTY Busy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4cc8d46e-cd6e-00b1-1c6a-c19296eb804f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Busy := bBusy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="CyclicComm" Id="{82ef3be5-f3df-02d6-10c6-c053ccad0d06}">
+      <Declaration><![CDATA[METHOD CyclicComm
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+	This method proves the cyclic communication for all Twincat motion function blocks
+*)
+Axis();
+fbPower(Axis:= Axis);
+fbMoveAbs1(Axis:= Axis);
+fbMoveAbs2(Axis:= Axis);
+fbMoveAbs3(Axis:= Axis);
+fbHalt(Axis:= Axis);
+fbStop(Axis:= Axis);
+fbReset(Axis := Axis);
+fbJog(Axis:= Axis);
+fbMoveRel(Axis:= Axis);
+fbMoveVelo(Axis:= Axis);
+fbMoveModulo(Axis:= Axis);
+fbHome(Axis:= Axis);
+mErrorMonitoring();]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="DidHalt" Id="{c9c5ce33-11bd-0127-3e2f-58f37c742b7a}">
+      <Declaration><![CDATA[PROPERTY DidHalt : BOOL]]></Declaration>
+      <Get Name="Get" Id="{04115a02-2506-0727-0bcd-4d101da985f6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidHalt := bDidHalt;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidInitialize" Id="{99acc425-203a-06b7-27a2-e326d2a753b3}">
+      <Declaration><![CDATA[PROPERTY DidInitialize : BOOL]]></Declaration>
+      <Get Name="Get" Id="{50cb7456-5427-071d-2d15-738c63359c31}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidInitialize := bDidInitialize;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidMoveAbs" Id="{3f8f4981-7d30-06e4-2080-8f532e6f73be}">
+      <Declaration><![CDATA[PROPERTY DidMoveAbs : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1e4c1c19-6f8f-002d-3328-ecb929bed0d4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidMoveAbs := bDidMoveAbs;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidMoveMod" Id="{7b19685d-6f44-45fe-9ea8-c8b0870adf22}">
+      <Declaration><![CDATA[PROPERTY DidMoveMod : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c45c7119-9911-4690-a1a6-699c88a1cd3a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidMoveMod := bDidMoveMod;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidMoveRelative" Id="{5429bde4-5adc-0e27-3f7e-4d9c2ef62b4e}">
+      <Declaration><![CDATA[PROPERTY DidMoveRelative : BOOL]]></Declaration>
+      <Get Name="Get" Id="{adff03c0-d3a9-0921-2faa-3fbd7b01e0de}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidMoveRelative := bDidMoveRel;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidMoveVelo" Id="{f31055d7-8b0f-07d8-0692-27a57ffc7b96}">
+      <Declaration><![CDATA[PROPERTY DidMoveVelo : BOOL]]></Declaration>
+      <Get Name="Get" Id="{08633809-bf69-03fe-140d-7fea17bcf812}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidMoveVelo := bDidMoveVelo;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidPowerOff" Id="{83601de2-5875-0f5e-01f2-3b4faac49399}">
+      <Declaration><![CDATA[PROPERTY DidPowerOff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{750f00c4-24a0-0247-1cf1-5f35d1eafeb0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidPowerOff := bDidPowerOff;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidPowerOn" Id="{77e0767b-a2fa-404f-babd-51fb6ac8405a}">
+      <Declaration><![CDATA[PROPERTY DidPowerOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{02ead8e9-ede0-4196-ad6a-e6ae614f8deb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidPowerOn := bDidPowerOn;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidRef" Id="{b7ac2fff-68f9-4cde-be8d-72d293ce3c66}">
+      <Declaration><![CDATA[PROPERTY DidRef : BOOL]]></Declaration>
+      <Get Name="Get" Id="{98947a90-cfc1-4ee0-a1b4-e780d8a524f5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidRef := bDidRef;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidReset" Id="{b60ee83e-c13b-0a66-0808-93303eb125e2}">
+      <Declaration><![CDATA[PROPERTY DidReset : BOOL]]></Declaration>
+      <Get Name="Get" Id="{19e9f508-9ee4-0c2b-227e-ee2ea462e7d9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidReset := bDidReset;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="DidZero" Id="{3fed3467-5d37-4e2e-9562-2ac0b6096431}">
+      <Declaration><![CDATA[PROPERTY DidZero : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6dc11f0f-e265-49b0-91e8-24dad5a81bae}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[DidZero := bDidZero;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Halt" Id="{f07a261f-36a1-0738-35f9-140f0121c016}">
+      <Declaration><![CDATA[METHOD PUBLIC Halt : BOOL
+VAR_INPUT
+	Execute:			BOOL;
+	MotionParams:		ST_MOTION_PARAMS;
+END_VAR
+VAR_INST
+	State:				INT;
+	rtrigHalt:			R_TRIG;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigHalt(CLK := Execute);
+CASE State OF 
+	0:	//Execute
+		IF rtrigHalt.Q THEN
+			Halt := FALSE;
+			bDidHalt := FALSE;
+			State := 10;
+		END_IF
+	10://Halt 
+		fbHalt.Deceleration:= MotionParams.TargetDecel; 
+		fbHalt.Jerk:= MotionParams.Jerk; 
+		fbHalt.Execute:= TRUE;
+		IF fbHalt.Done THEN 
+			State := 20;
+		END_IF
+	20://Confirm halt done and set any execute commands to FALSE
+		IF fbHalt.Execute THEN
+			fbHalt.Execute := FALSE;
+			fbMoveAbs1.Execute := FALSE;
+			fbMoveAbs2.Execute := FALSE;
+			fbMoveModulo.Execute := FALSE;
+			fbMoveRel.Execute := FALSE;
+			fbMoveVelo.Execute := FALSE;
+			State := 30;
+		END_IF
+	30:// Reset to update the actual position and confirm again all execute commands to FALSE
+		IF Reset(TRUE) THEN
+			Reset(FALSE);
+			fbHalt.Execute := FALSE;
+			fbMoveAbs1.Execute := FALSE;
+			fbMoveAbs2.Execute := FALSE;
+			fbMoveAbs3.Execute := FALSE;
+			fbMoveModulo.Execute := FALSE;
+			fbMoveRel.Execute := FALSE;
+			fbMoveVelo.Execute := FALSE; 
+			State := 40;
+		END_IF
+	40: //Done 
+		Halt := TRUE;
+		bDidHalt := TRUE;
+		State := 0;
+END_CASE ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Initialize" Id="{3164a962-cd4b-0e01-0a10-880d10c34473}">
+      <Declaration><![CDATA[METHOD Initialize : BOOL
+VAR_INPUT
+	Execute:		BOOL;
+END_VAR
+VAR_INST
+	State:	INT;
+	rtrigInitialize :	R_TRIG;
+	Timer:				TON;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigInitialize(CLK := Execute);
+CASE State OF	
+	0: //Execute  	
+		IF rtrigInitialize.Q THEN
+			Initialize := FALSE;
+			bDidInitialize := FALSE;
+			State := 10;
+		END_IF
+	10 :  // Reset Axis
+		IF Reset(TRUE) THEN
+			Reset(FALSE);
+			State := 20;
+		END_IF				
+	20 : // Power on axis
+		IF Axis_PowerOn(TRUE) THEN
+			Axis_PowerOn(FALSE);
+			State := 30;
+		END_IF
+	30: // Dwell Time before calling any third party axis reference if applicable 
+		Timer(IN := TRUE, PT := T#2S);
+		IF Timer.Q THEN
+			Timer(IN := FALSE);
+			State := 40;
+		END_IF
+	40: //Reference axis
+		IF Ref(TRUE) THEN 
+			Ref(FALSE);
+			Initialize := TRUE;
+			bDidInitialize := TRUE;
+			State := 0;
+		END_IF					
+END_CASE
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mErrorMonitoring" Id="{af2f4086-5bde-4b39-b14b-504db9e37545}">
+      <Declaration><![CDATA[(*
+	Error monitoring for MC function blocks
+*)
+METHOD mErrorMonitoring 
+VAR_INST
+	bFbError:	BOOL;
+	bNcError:	BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*Check for Fb error*)
+IF fbPower.Error OR 
+fbMoveAbs1.Error OR 
+fbMoveAbs2.Error OR 
+fbMoveAbs3.Error OR
+fbHalt.Error OR 
+fbReset.Error OR 
+fbJog.Error OR 
+fbMoveRel.Error OR 
+fbMoveVelo.Error OR 
+fbMoveModulo.Error THEN
+	bFbError := TRUE;
+ELSE 
+	bFbError := FALSE;
+END_IF
+
+(*Get Fb error code*)
+IF fbPower.Error THEN
+	udnErrorCode := fbPower.ErrorID;
+ELSIF fbMoveAbs1.Error THEN
+	udnErrorCode := fbMoveAbs1.ErrorID; 
+ELSIF fbMoveAbs2.Error THEN
+	udnErrorCode := fbMoveAbs2.ErrorID;
+ELSIF fbMoveAbs3.Error THEN
+	udnErrorCode := fbMoveAbs3.ErrorID;
+ELSIF fbHalt.Error THEN
+	udnErrorCode := fbHalt.ErrorID;
+ELSIF fbReset.Error THEN
+	udnErrorCode := fbReset.ErrorID;
+ELSIF fbJog.Error THEN
+	udnErrorCode := fbJog.ErrorID;
+ELSIF fbMoveRel.Error THEN
+	udnErrorCode := fbMoveRel.ErrorID;
+ELSIF fbMoveVelo.Error THEN
+	udnErrorCode := fbMoveVelo.ErrorID;
+ELSIF fbMoveModulo.Error THEN
+	udnErrorCode := fbMoveModulo.ErrorID;
+END_IF
+
+(*Check for Nc error*)
+IF NOT bFbError AND Axis.NcToPlc.ErrorCode <> 0 THEN
+	bNcError := TRUE;
+ELSE 
+	bNcError := FALSE;
+END_IF
+
+(*Get Nc error code*)
+IF bNcError THEN
+	udnErrorCode := Axis.NcToPlc.ErrorCode;
+END_IF
+
+(*Write error and code*)
+bError := bNcError OR bFbError;
+IF NOT bError THEN
+	udnErrorCode := 0;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mEventHandler" Id="{14e50471-f6ea-4d34-893b-8791275dfb84}">
+      <Declaration><![CDATA[METHOD mEventHandler
+VAR_INPUT
+	Error:						BOOL;
+	ErrorCode: 					UDINT;
+END_VAR
+VAR_INST 
+	rtrigError:					R_TRIG;
+	rtrigConfirmError:			R_TRIG;
+	rtrigClearError:			R_TRIG;
+	bAddListener:				BOOL;
+	ITcArguments:				I_TcArguments;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*WRITE*)
+	rtrigError(CLK := Error);
+	rtrigConfirmError(CLK := bAckError);
+	rtrigClearError(CLK := bClearError);
+	
+	(* Event: Axis generic error *)
+	IF rtrigError.Q THEN
+		fbTcAlarm_Error.CreateEx(stSeiEvents.Axis_Generic_Error, TRUE, 0);
+		fbTcAlarm_Error.ipArguments.Clear().AddUDInt(Axis.NcToPlc.AxisId);
+		fbTcAlarm_Error.ipArguments.Clear().AddUDInt(udnErrorCode);	//Does this work?
+		fbTcAlarm_Error.Raise(0);
+	END_IF
+		
+	
+	(* Event: confirm error *)
+	IF rtrigConfirmError.Q THEN
+		fbTcAlarm_Error.Confirm(0);
+		bAckError := FALSE;
+	END_IF
+	
+	(* Event: clear error *)
+	IF rtrigClearError.Q THEN
+		fbTcAlarm_Error.Clear(0, TRUE);
+	END_IF
+
+(*READ*)
+	fbAlarmListener.Execute();
+	IF bAddListener THEN
+		bAddListener := FALSE;
+		fbAlarmListener.Subscribe(0,0);
+	END_IF
+	
+	IF fbAlarmListener.pAlarmConfirmed THEN
+		bErrorConfirmed := TRUE;
+	END_IF
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mManualAxisControl" Id="{8ce0d4ec-67a1-0c99-14b4-b8e7c0dfc242}">
+      <Declaration><![CDATA[METHOD mManualAxisControl : BOOL
+VAR_IN_OUT 
+	bManualReset:				BOOL;
+	bManualPowerOff:			BOOL;
+	bManualInit:				BOOL;
+END_VAR
+VAR_INPUT
+	stJogParams:				ST_JOG_PARAMS;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+	This method allows for manual control of the axis via input commands
+*)
+(* Jog Axis *)
+IF NOT bManualInit AND NOT bManualReset AND NOT bManualPowerOff THEN
+	Axis_Jog(JogParams:= stJogParams);
+END_IF
+(* Reset Axis *)
+IF bManualReset AND NOT bManualInit AND NOT bManualPowerOff THEN
+	IF Reset(TRUE) THEN
+		Reset(FALSE);
+		bManualReset := FALSE;
+	END_IF
+END_IF
+(* Power Off Axis *)
+IF bManualPowerOff AND NOT bManualInit AND NOT bManualReset THEN
+	IF Axis_PowerOff(TRUE) THEN
+		Axis_PowerOff(FALSE);
+		bManualPowerOff := FALSE;
+	END_IF
+END_IF
+(* Re-Initialize Axis*) 
+IF bManualInit AND NOT bManualPowerOff AND NOT bManualReset THEN
+	IF Initialize(TRUE) THEN
+		Initialize(FALSE);
+		bManualInit := FALSE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MoveAbs" Id="{a2b73b5f-608c-0cd0-3adb-51e668cf360b}">
+      <Declaration><![CDATA[METHOD MoveAbs : BOOL
+VAR_INPUT
+	Execute:			BOOL;
+	MotionParams:		ST_MOTION_PARAMS;
+END_VAR
+VAR_INST
+	State :				INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF
+	0: //Execute
+		IF rtrigExecute.Q THEN
+			MoveAbs := FALSE;
+			bDidMoveAbs := FALSE;
+			State := 10;
+		END_IF
+	10: //Move 
+		fbMoveAbs1.Position:= MotionParams.TargetPos; 
+		fbMoveAbs1.Velocity:= MotionParams.TargetVel; 
+		fbMoveAbs1.Acceleration:= MotionParams.TargetAccel; 
+		fbMoveAbs1.Deceleration:= MotionParams.TargetDecel;
+		fbMoveAbs1.Jerk:= MotionParams.Jerk;
+		fbMoveAbs1.Execute:= TRUE;  
+		IF fbMoveAbs1.Done THEN
+			fbMoveAbs1.Execute:= FALSE;
+			MoveAbs := TRUE;
+			bDidMoveAbs := TRUE;		
+			State := 0;
+		END_IF
+END_CASE	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MoveAbsBuffered" Id="{8d8a3495-488c-0981-3d4b-0cbe2f7b9ffb}">
+      <Declaration><![CDATA[METHOD MoveAbsBuffered : BOOL
+VAR_INPUT
+	Execute :				BOOL;
+	MotionParamsP1 :		ST_MOTION_PARAMS;	//Motion 1 paramters (MC_Buffered must be used for BufferMode)
+	MotionParamsP2 :		ST_MOTION_PARAMS;	//Motion 2 paramters (MC_BlendingNext, High, Low, Previous )
+END_VAR
+VAR_INST
+	State :					INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF
+	0: //Execute
+		IF rtrigExecute.Q THEN
+			MoveAbsBuffered := FALSE;
+			State := 10;
+		END_IF	
+	10: //Execute motion 1 
+		fbMoveAbs1.Execute := TRUE;
+		fbMoveAbs1.Position := MotionParamsP1.TargetPos;
+		fbMoveAbs1.Velocity := MotionParamsP1.TargetVel; 
+		fbMoveAbs1.Acceleration := MotionParamsP1.TargetAccel; 
+		fbMoveAbs1.Deceleration := MotionParamsP1.TargetAccel; 
+		fbMoveAbs1.Jerk := MotionParamsP1.Jerk;
+		fbMoveAbs1.BufferMode := MotionParamsP1.BufferMode;
+		IF fbMoveAbs1.Active THEN
+			fbMoveAbs1.Execute := FALSE;
+			State := 20;
+		ELSIF NOT Execute THEN
+			State := 0;;			
+		END_IF 
+	20: //Execute motion 2
+		fbMoveAbs2.Execute := TRUE;
+		fbMoveAbs2.Position := MotionParamsP2.TargetPos;
+		fbMoveAbs2.Velocity := MotionParamsP2.TargetVel; 
+		fbMoveAbs2.Acceleration := MotionParamsP2.TargetAccel; 
+		fbMoveAbs2.Deceleration := MotionParamsP2.TargetAccel; 
+		fbMoveAbs2.Jerk := MotionParamsP2.Jerk;
+		fbMoveAbs2.BufferMode := MotionParamsP2.BufferMode;
+		IF fbMoveAbs2.Done THEN
+			fbMoveAbs2.Execute := FALSE;
+			State := 30;
+		ELSIF NOT Execute THEN
+			State := 0;;			
+		END_IF
+	30: //Check busy output for completion 
+		IF NOT fbMoveAbs1.Busy AND NOT fbMoveAbs2.Busy THEN
+			MoveAbsBuffered := TRUE;
+			State := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MoveAbsBuffered3Pos" Id="{337d7828-2cf5-47f3-aef6-4bd7d9878685}">
+      <Declaration><![CDATA[METHOD MoveAbsBuffered3Pos : BOOL
+VAR_INPUT
+	Execute :				BOOL;
+	MotionParamsP1 :		ST_MOTION_PARAMS;	//Motion 1 paramters (MC_Buffered must be used for BufferMode)
+	MotionParamsP2 :		ST_MOTION_PARAMS;	//Motion 2 paramters (MC_BlendingNext, High, Low, Previous )
+	MotionParamsP3 :		ST_MOTION_PARAMS;	//Motion 3 paramters (MC_BlendingNext, High, Low, Previous )
+END_VAR
+VAR_INST
+	State :					INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF
+	0: //Execute
+		IF rtrigExecute.Q THEN
+			MoveAbsBuffered3Pos := FALSE;
+			State := 10;
+		END_IF	
+	10: //Execute motion 1 
+		fbMoveAbs1.Execute := TRUE;
+		fbMoveAbs1.Position := MotionParamsP1.TargetPos;
+		fbMoveAbs1.Velocity := MotionParamsP1.TargetVel; 
+		fbMoveAbs1.Acceleration := MotionParamsP1.TargetAccel; 
+		fbMoveAbs1.Deceleration := MotionParamsP1.TargetAccel; 
+		fbMoveAbs1.Jerk := MotionParamsP1.Jerk;
+		fbMoveAbs1.BufferMode := MotionParamsP1.BufferMode;
+		IF fbMoveAbs1.Active THEN
+			fbMoveAbs1.Execute := FALSE;
+			State := 20;
+		ELSIF NOT Execute THEN
+			State := 0;;			
+		END_IF 
+	20: //Execute motion 2
+		fbMoveAbs2.Execute := TRUE;
+		fbMoveAbs2.Position := MotionParamsP2.TargetPos;
+		fbMoveAbs2.Velocity := MotionParamsP2.TargetVel; 
+		fbMoveAbs2.Acceleration := MotionParamsP2.TargetAccel; 
+		fbMoveAbs2.Deceleration := MotionParamsP2.TargetAccel; 
+		fbMoveAbs2.Jerk := MotionParamsP2.Jerk;
+		fbMoveAbs2.BufferMode := MotionParamsP2.BufferMode;
+		IF fbMoveAbs2.Active THEN
+			fbMoveAbs2.Execute := FALSE;
+			State := 30;
+		ELSIF NOT Execute THEN
+			State := 0;
+		END_IF
+	30:	//Execute motion 2
+		fbMoveAbs3.Execute := TRUE;
+		fbMoveAbs3.Position := MotionParamsP3.TargetPos;
+		fbMoveAbs3.Velocity := MotionParamsP3.TargetVel; 
+		fbMoveAbs3.Acceleration := MotionParamsP3.TargetAccel; 
+		fbMoveAbs3.Deceleration := MotionParamsP3.TargetAccel; 
+		fbMoveAbs3.Jerk := MotionParamsP3.Jerk;
+		fbMoveAbs3.BufferMode := MotionParamsP3.BufferMode;
+		IF fbMoveAbs3.Done THEN
+			fbMoveAbs3.Execute := FALSE;
+			State := 40;
+		ELSIF NOT Execute THEN
+			State := 0;;			
+		END_IF
+	40: //Check busy output for completion 
+		IF NOT fbMoveAbs1.Busy AND NOT fbMoveAbs2.Busy AND NOT fbMoveAbs3.Busy THEN
+			MoveAbsBuffered3Pos := TRUE;
+			State := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MoveVelo" Id="{9841c12f-d23e-0f89-10be-82389863dc73}">
+      <Declaration><![CDATA[METHOD PUBLIC MoveVelo : BOOL
+VAR_INPUT
+	Execute :				BOOL;
+	MotionParams:			ST_MOTION_PARAMS;
+END_VAR
+VAR_INST
+	State:					INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF 
+	0:	// Execute
+		IF rtrigExecute.Q THEN
+			MoveVelo := FALSE;
+			bDidMoveVelo := FALSE;
+			State := 10;
+		END_IF
+	10://Move Velocity
+			fbMoveVelo.Execute:= TRUE;
+			fbMoveVelo.Velocity:= MotionParams.TargetVel; 
+			fbMoveVelo.Acceleration:= MotionParams.TargetAccel; 
+			fbMoveVelo.Deceleration:= MotionParams.TargetDecel; 
+			fbMoveVelo.Jerk:= MotionParams.Jerk; 
+			fbMoveVelo.Direction:= MotionParams.Direction; 
+		IF fbMoveVelo.InVelocity THEN
+			fbMoveVelo.Execute:= FALSE;
+			MoveVelo := TRUE;
+			bDidMoveVelo := TRUE;
+			State := 0;
+		END_IF
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="mStopWithOverride" Id="{0d193272-35bc-41e0-bfb6-ddae19a6252c}">
+      <Declaration><![CDATA[METHOD mStopWithOverride : BOOL
+VAR_INPUT
+	udnOverride			:	UDINT;
+	bUseOverrideOK		:	BOOL;	//Signal is true when override is used, otherwise zero.
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bUseOverrideOK AND GVL.bCurrentIsZero THEN
+	SetAxisOverride(Override := udnOverride);
+ELSE
+	SetAxisOverride(Override := 0);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="pAckError" Id="{bdd65713-20a1-0439-32a0-4a9db7cda593}">
+      <Declaration><![CDATA[PROPERTY pAckError : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{afaa31c7-333d-4839-b029-a74a32f096d5}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{89dd11e6-d8ad-0f36-233e-4e30fcb0c9e5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="Pause" Id="{ca6a3fb6-4599-0172-2418-422bc64f6cc4}">
+      <Declaration><![CDATA[METHOD Pause : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Pause := FALSE;
+fbPower.Override := 0;
+Pause := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="pClearError" Id="{5ced5e26-4af1-42d0-b717-bf48bf592129}">
+      <Declaration><![CDATA[PROPERTY pClearError : BOOL]]></Declaration>
+      <Set Name="Set" Id="{4613cbfb-0b65-4738-a3b2-79d192d2bea1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="pError" Id="{389eac8b-7ba9-4898-bd3e-01703bfbff72}">
+      <Declaration><![CDATA[PROPERTY pError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6b8c26a0-05e9-4f47-aa5a-f111cf4cfb2f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pError := bError;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0da7daf1-1c54-41bb-9f7a-a2c59b802ad0}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="pErrorCleared" Id="{4a949592-c2c6-4114-a371-811ce7cd7393}">
+      <Declaration><![CDATA[PROPERTY pErrorCleared : BOOL]]></Declaration>
+      <Get Name="Get" Id="{29a00d91-a934-4efa-bcde-e2a64d28c348}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="pErrorCode" Id="{02753178-07d7-4000-81a1-8f293e8e9e07}">
+      <Declaration><![CDATA[PROPERTY pErrorCode : UDINT]]></Declaration>
+      <Get Name="Get" Id="{62c22178-707b-4d68-97c6-fd89ff585c9f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pErrorCode := udnErrorCode;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{5e57a0df-b848-4785-be3d-9ff708bea937}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="pErrorConfirmed" Id="{2d5b7fb5-8de7-4a50-918e-1c3b6e7f15fd}">
+      <Declaration><![CDATA[PROPERTY pErrorConfirmed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5b4bb23a-2913-4d56-a665-2b26e841419b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="pErrorDescription" Id="{231074dd-9920-470e-ad36-6ab373aa9f93}">
+      <Declaration><![CDATA[PROPERTY pErrorDescription : T_MaxString]]></Declaration>
+      <Get Name="Get" Id="{f706c2cd-7f5e-4637-a7c7-207bc3a306d5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{502ab05d-5e98-4034-a57a-ba9fdf688b5e}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="pIsMoving" Id="{055b857f-b1ca-06d0-23a5-12a87a2d74c7}">
+      <Declaration><![CDATA[PROPERTY pIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{088effb7-1f23-0b25-361b-f4cf9e2b41ad}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pIsMoving := fbMoveAbs1.Busy OR fbMoveAbs2.Busy OR fbMoveAbs3.Busy OR fbMoveModulo.Busy OR fbMoveVelo.Busy OR fbMoveRel.Busy OR fbJog.Busy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Ref" Id="{382ff760-5e26-05cc-21a1-efbe602270cc}">
+      <Declaration><![CDATA[METHOD Ref : BOOL
+VAR_INPUT
+	Execute:	BOOL;
+END_VAR
+VAR_INST 
+	State:		INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF	
+	0: //Execute 
+		IF rtrigExecute.Q THEN
+			bDidRef := FALSE;
+			Ref := FALSE;
+			State := 10;
+		END_IF
+	10: //Reference
+		Ref := TRUE;
+		bDidRef := TRUE;
+		IF Ref THEN
+			State := 0;
+		END_IF 
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Reset" Id="{1467f166-be90-0c55-18f3-8df3a4274595}">
+      <Declaration><![CDATA[METHOD Reset : BOOL
+VAR_INPUT
+	Execute:		BOOL;
+END_VAR
+VAR_INST
+	State:			INT;
+	rtrigReset:		R_TRIG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigReset(CLK := Execute);
+CASE State OF
+	0: //Execute
+		IF rtrigReset.Q THEN
+			Reset := FALSE;
+			bDidReset := FALSE;
+			State := 10;
+		END_IF
+	10: //Reset 
+		fbReset.Execute:= TRUE;
+		IF fbReset.Done THEN
+			fbReset.Execute := FALSE;
+			bDidReset := TRUE;
+			Reset := TRUE;
+			State := 0;
+		END_IF	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Resume" Id="{afdd612e-3852-02fe-13e5-5df207354cd7}">
+      <Declaration><![CDATA[METHOD Resume : BOOL
+VAR_INPUT
+	ResumeOverride: LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Resume := FALSE;
+fbPower.Override := ResumeOverride;
+Resume := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetAxisOverride" Id="{fdc83197-30cb-052c-1094-237e4d706244}">
+      <Declaration><![CDATA[METHOD SetAxisOverride
+VAR_INPUT
+	Override:				UDINT;						//Set value from 0-100%
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+	This method passes an override value to the NC 
+*)
+fbPower.Override := Override;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="Status" Id="{c0924eaa-187d-008b-125d-535c3211325a}">
+      <Declaration><![CDATA[PROPERTY Status : BOOL]]></Declaration>
+      <Get Name="Get" Id="{22992cc3-dde0-07d9-3fc2-4d11e2dbae7e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[Status := fbPower.Status;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Stop" Id="{abb2a7b4-75d3-439d-bfb3-62dcceb826f9}">
+      <Declaration><![CDATA[METHOD Stop : BOOL
+VAR_INPUT
+	Execute:			BOOL;
+	MotionParams:		ST_MOTION_PARAMS;
+END_VAR
+VAR_INST
+	State:				INT;
+	rtrigHalt:			R_TRIG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigHalt(CLK := Execute);
+CASE State OF 
+	0:	//Execute
+		IF Execute THEN
+			Stop := FALSE;
+			State := 10;
+		END_IF
+	10://Halt 
+		fbStop.Deceleration:= MotionParams.TargetDecel; 
+		fbStop.Jerk:= MotionParams.Jerk; 
+		fbStop.Execute:= TRUE;
+END_CASE ]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_AxisBase">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Aborted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.ActAccl.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Active.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.ActPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.ActVelo.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Axis_Jog">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Axis_MoveModulo">
+      <LineId Id="3" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Axis_MoveRelative">
+      <LineId Id="3" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Axis_PowerOff">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Axis_PowerOn">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Axis_Zero">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Busy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.CyclicComm">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidHalt.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidInitialize.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidMoveAbs.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidMoveMod.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidMoveRelative.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidMoveVelo.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidPowerOff.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidPowerOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidRef.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidReset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.DidZero.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Halt">
+      <LineId Id="3" Count="40" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Initialize">
+      <LineId Id="3" Count="32" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.mErrorMonitoring">
+      <LineId Id="3" Count="55" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.mEventHandler">
+      <LineId Id="3" Count="34" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.mManualAxisControl">
+      <LineId Id="3" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.MoveAbs">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.MoveAbsBuffered">
+      <LineId Id="3" Count="39" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.MoveAbsBuffered3Pos">
+      <LineId Id="3" Count="53" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.MoveVelo">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.mStopWithOverride">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pAckError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pAckError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Pause">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pClearError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pErrorCleared.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pErrorCode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pErrorCode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pErrorConfirmed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pErrorDescription.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pErrorDescription.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.pIsMoving.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Ref">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Reset">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Resume">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.SetAxisOverride">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Status.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AxisBase.Stop">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

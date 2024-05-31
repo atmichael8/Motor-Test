@@ -1,0 +1,268 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_AlarmListener" Id="{f5a091c5-13de-4239-b65c-02c4e0e19b4c}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+	The function block serves as the basic implementation of an event listener.
+	New messages and state changes of alarms can be recognized through the overwriting of the event-driven
+	methods.
+*)
+FUNCTION_BLOCK FB_AlarmListener EXTENDS FB_ListenerBase2
+VAR
+(*POUs*)
+	fbRequestEventText:			FB_RequestEventText;
+(*Property vars*)
+	udnLastEventID: 			UDINT;
+	ulnLastEventTimeStamp: 		ULINT;
+	sLastEventText: 			STRING;
+	bReqEventText: 				BOOL;
+	bAlarmRaised:				BOOL;
+	bAlarmConfirmed:			BOOL;
+	bAlarmCleared:				BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Execute" Id="{0071f062-5957-43c3-9046-60c4e16f3ea4}">
+      <Declaration><![CDATA[METHOD Execute : HRESULT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Execute := SUPER^.Execute(); //retrieve events
+
+//retrieve the text of a message
+IF 	bReqEventText AND fbRequestEventText.bError THEN 
+	sLastEventText := 'Error';
+	bReqEventText := FALSE; 
+ELSIF bReqEventText AND NOT  fbRequestEventText.bBusy THEN
+	fbRequestEventText.GetString(sLastEventText, SIZEOF(sLastEventText));
+	bReqEventText := FALSE;
+END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OnAlarmCleared" Id="{1ec6d741-b38b-4a00-8232-77d9e322dc0b}">
+      <Declaration><![CDATA[METHOD OnAlarmCleared : HRESULT
+VAR_INPUT
+	fbEvent:	REFERENCE TO FB_TcEvent;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Get alarm ID 
+udnLastEventID := fbEvent.nEventId;
+//Get alarm time stamp
+ulnLastEventTimeStamp := fbEvent.nTimestamp;
+//Send request to get alarm text 
+fbRequestEventText.Request(eventClass := fbEvent.EventClass, nEventId := fbEvent.nEventId, nLangId := 1033, ipArgs := fbEvent.ipArguments);
+bReqEventText := TRUE;
+//Validate alarm cleared
+bAlarmCleared := TRUE;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OnAlarmConfirmed" Id="{fac9c096-a6a5-4998-bbbd-a22e87eccca0}">
+      <Declaration><![CDATA[METHOD OnAlarmConfirmed : HRESULT
+VAR_INPUT
+	fbEvent:	REFERENCE TO FB_TcEvent;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Get alarm ID 
+udnLastEventID := fbEvent.nEventId;
+//Get alarm time stamp
+ulnLastEventTimeStamp := fbEvent.nTimestamp;
+//Send request to get alarm text 
+fbRequestEventText.Request(eventClass := fbEvent.EventClass, nEventId := fbEvent.nEventId, nLangId := 1033, ipArgs := fbEvent.ipArguments);
+bReqEventText := TRUE;
+//Validate alarm confirmed
+bAlarmConfirmed := TRUE;
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OnAlarmRaised" Id="{4d95c52d-1f22-46fb-ad4e-7340e87fbedc}">
+      <Declaration><![CDATA[METHOD OnAlarmRaised : HRESULT
+VAR_INPUT
+	fbEvent:	REFERENCE TO FB_TcEvent;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Get alarm ID 
+udnLastEventID := fbEvent.nEventId;
+//Get alarm time stamp
+ulnLastEventTimeStamp := fbEvent.nTimestamp;
+//Send request to get alarm text 
+fbRequestEventText.Request(eventClass := fbEvent.EventClass, nEventId := fbEvent.nEventId, nLangId := 1033, ipArgs := fbEvent.ipArguments);
+bReqEventText := TRUE;
+//Validate alarm raised
+bAlarmRaised := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="pAlarmCleared" Id="{1af81927-7f7e-406e-9560-8f90e695b1d5}">
+      <Declaration><![CDATA[PROPERTY pAlarmCleared : BOOL]]></Declaration>
+      <Get Name="Get" Id="{06f9264c-c756-4aeb-9490-4385c62fab5a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pAlarmCleared := bAlarmCleared;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b44a232f-f2d4-46ab-b544-205ffce1061b}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bAlarmCleared := pAlarmCleared;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="pAlarmConfirmed" Id="{869e3f20-0487-4e3f-b8cc-431dfb91ec06}">
+      <Declaration><![CDATA[PROPERTY pAlarmConfirmed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c0d6ccf1-f7e7-4ee8-b94a-726946365537}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pAlarmConfirmed := bAlarmConfirmed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e4e761e7-4645-456c-8743-e9ceb79744e3}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bAlarmConfirmed := pAlarmConfirmed;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="pAlarmRaised" Id="{2a1e2dc2-a3cc-4af8-9a1b-f0c80cece87e}">
+      <Declaration><![CDATA[PROPERTY pAlarmRaised : BOOL]]></Declaration>
+      <Get Name="Get" Id="{780c5a83-f437-40b7-a93c-3e3420e31968}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pAlarmRaised := bAlarmRaised;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ef17bef6-a298-4230-ac4e-e8caa27be8c5}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bAlarmRaised := pAlarmRaised;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="pLastEventID" Id="{c29fac3b-38c2-469a-88f5-3e8c1750c274}">
+      <Declaration><![CDATA[PROPERTY pLastEventID : udint]]></Declaration>
+      <Get Name="Get" Id="{aaa1dedf-1fb6-42df-bc0e-9516ced32b66}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pLastEventID := udnLastEventID;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="pLastEventText" Id="{8fc69a74-daba-4841-af33-9ba221d35839}">
+      <Declaration><![CDATA[PROPERTY pLastEventText : string]]></Declaration>
+      <Get Name="Get" Id="{ffe48195-99b8-47c6-a8dd-9eeab89e9dec}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pLastEventText := sLastEventText;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="pLastEventTimeStamp" Id="{7b5fa08c-0604-4f4e-a9a5-e7023ad8a822}">
+      <Declaration><![CDATA[PROPERTY pLastEventTimeStamp : ulint]]></Declaration>
+      <Get Name="Get" Id="{f7cab8d3-1964-4489-9587-8c83315a3875}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pLastEventTimeStamp := ulnLastEventTimeStamp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_AlarmListener">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.Execute">
+      <LineId Id="6" Count="8" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="23" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.OnAlarmCleared">
+      <LineId Id="14" Count="5" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.OnAlarmConfirmed">
+      <LineId Id="17" Count="5" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.OnAlarmRaised">
+      <LineId Id="20" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="19" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pAlarmCleared.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pAlarmCleared.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pAlarmConfirmed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pAlarmConfirmed.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pAlarmRaised.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pAlarmRaised.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pLastEventID.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pLastEventText.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AlarmListener.pLastEventTimeStamp.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

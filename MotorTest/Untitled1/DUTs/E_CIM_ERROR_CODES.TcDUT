@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="E_CIM_ERROR_CODES" Id="{1a2cd466-73bd-47cf-838b-e18ffca3e738}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_CIM_ERROR_CODES :
+(
+	None := 0,
+	//MAIN Errors
+	EStopDepressed := 1000,
+	//Contact AFS Errors (3000s)
+	ContactAFS_SequencerNotOpen := 3001,
+	ContactAFS_SequencerDidNotReachPickupPosition := 3002,
+	ContactAFS_VibrationTimedOut := 3003
+	
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

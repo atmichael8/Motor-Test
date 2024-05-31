@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_PLACEMENT_ERROR_INFO" Id="{3febc38a-bdb1-4b0e-8e5a-5dcb1a3032de}">
+    <Declaration><![CDATA[TYPE ST_PLACEMENT_ERROR_INFO :
+STRUCT
+	stShellNumber:			STRING;
+	stContactNumber:		STRING;
+	stInsertionErrorInfo:	STRING;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_CYCLE_TRACKING" Id="{26eaa7ae-e55e-4189-bdb9-28534eb18c37}">
+    <Declaration><![CDATA[TYPE ST_CYCLE_TRACKING :
+STRUCT
+	sComponentName:			STRING;
+	nCurrentCycles:			UDINT;
+	sMaintenance:			STRING;
+	nMaxCycles:				UDINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

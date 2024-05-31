@@ -1,0 +1,570 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_XenaxAxisForceFeedback" Id="{ac8791d9-5f9a-09e0-3faf-429e9c54701e}" SpecialFunc="None">
+    <Declaration><![CDATA[(* 
+:WARNING: Still in development
+
+:Description: This function block should be used to control a jenny science axis
+
+:Instructions for use:
+
+	- Update this function block every cycle
+	
+Version history:
+
++-------------+------------+----------------+--------+---------------+------------------------------------------+
+|Date         | Version    | created under  | Author |Checked By     | Remark                                   |
++=============+============+================+========+===============+==========================================+
+|10-11-2019   | 0.0.0      | V3.1.4022.28   | C.B.   |               | 								            |
++-------------+------------+----------------+--------+---------------+------------------------------------------+
+
+*)
+
+FUNCTION_BLOCK FB_XenaxAxisForceFeedback EXTENDS FB_AxisBase
+VAR_INPUT 
+	usiRefernceDirection				: USINT;
+END_VAR
+VAR
+(* Axis *)
+	instJS_MC_Init						: JS_MC_Init; //create PLC axis link through this FB instead of traditional AXIS_REF
+(* JSCM_Mc_Lib *)
+	instJS_MC_Power 					: JS_MC_Power;
+	instJS_MC_Reference 				: JS_MC_Reference;
+	instJS_MC_ReadAxisError				: JS_MC_ReadAxisError;
+	instJS_MC_ReadStatus 				: JS_MC_ReadStatus;
+	instJS_MC_Reset 					: JS_MC_Reset;
+	instJS_MC_CyclicIn 					: JS_MC_CyclicIn;
+	instJS_MC_ForceCalibration			: JS_MC_ForceCalibration;
+	instJS_MC_CyclicOut 				: JS_MC_CyclicOut;
+	instJS_MC_ReadPSR					: JS_MC_ReadPSR;
+	instJS_MC_ReadActualPosition		: JS_MC_ReadActualPosition;
+(* Internal Vars *)
+	bCyclic:							BOOL;
+	bInit:								BOOL := TRUE; //intialize on first plc cycle 
+	CommunicationError:					BOOL;
+	GetForceAtFailure:					LREAL;
+(* Property Variables *)
+	bValid:								BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*
+	Axis FB speciific to jenny science drive. Provides the necessary cyclic communication for JS_MC_Lib and the use of force feed back.
+*)
+//Calls all motion blocks cyclically
+JsCyclicComm();
+CyclicComm();
+
+]]></ST>
+    </Implementation>
+    <Property Name="ActAccl" Id="{b4234289-df7f-09b4-31c8-ad7ea20671c1}">
+      <Declaration><![CDATA[PROPERTY ActAccl : LREAL]]></Declaration>
+      <Get Name="Get" Id="{1420d36a-923f-0014-154c-4456b4dda78b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActAccl := CalculateAccl();]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ActForce" Id="{7f0de11f-393f-040e-0589-c9442c6fb82b}">
+      <Declaration><![CDATA[PROPERTY ActForce : lreal]]></Declaration>
+      <Get Name="Get" Id="{0921a44b-680b-053e-0a2a-521dddae6bc6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ActForce := ABS((DINT_TO_LREAL(instJS_MC_Init.RxPDO.diI_ForceActual_I2005))/1000); ]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ActPos" Id="{9e3a5162-f2c6-020d-1f81-b7fb49f98bf2}">
+      <Declaration><![CDATA[PROPERTY ActPos : lreal]]></Declaration>
+      <Get Name="Get" Id="{f50b0465-81b0-0fcc-1cf1-7e01d14567ed}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Scaled to millimeters 
+ActPos := (DINT_TO_LREAL(instJS_MC_Init.RxPDO.diPositionActualValue_I6064))/1000;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Axis_PowerOff" Id="{d5634e88-9212-0e40-0f76-82736d14feb9}">
+      <Declaration><![CDATA[METHOD Axis_PowerOff : BOOL
+VAR_INPUT
+	Execute:		BOOL;
+END_VAR
+VAR_INST
+	PowerState:		INT;
+	rtrigExecutePower :	R_TRIG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE PowerState OF
+
+	0: 	
+		rtrigExecutePower(CLK := Execute);
+		IF rtrigExecutePower.Q THEN
+			Axis_PowerOff := FALSE;
+			bDidPowerOff := FALSE;
+			bDidInitialize := FALSE;
+			PowerState := 10;
+		END_IF
+			
+	10:
+		IF instJS_MC_Power.Status THEN		
+			instJS_MC_Power.Enable := FALSE;										 
+  			instJS_MC_Power.Enable_Positive := 	FALSE;																	
+  			instJS_MC_Power.Enable_Negative	:= FALSE;										
+  			instJS_MC_Power.Override := 0;												
+		ELSIF NOT instJS_MC_Power.Status THEN
+			Axis_PowerOff := TRUE;
+			bDidPowerOff := TRUE;
+			PowerState := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Axis_PowerOn" Id="{4d8983ff-cf1a-4827-b796-9f8fb669def9}">
+      <Declaration><![CDATA[METHOD Axis_PowerOn : BOOL
+VAR_INPUT
+	Execute:				BOOL;
+END_VAR
+VAR_INST
+	State:					INT;
+	fbTimer:				TON;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigExecute(CLK := Execute);
+CASE State OF
+	0:  //Exectue	
+		IF rtrigExecute.Q THEN
+			Axis_PowerOn := FALSE;
+			bDidPowerOn := FALSE;
+			State := 5;
+		END_IF
+	5: //Cyclic valid
+		IF instJS_MC_CyclicIn.Valid THEN
+			State := 10;
+		END_IF
+	10: //Reset 
+		instJS_MC_Reset.Execute := TRUE;
+		State := 20;
+	20: //reset done 
+		IF instJS_MC_Reset.Done THEN
+			instJS_MC_Reset.Execute := FALSE;
+			State := 25;
+		END_IF
+	
+	25:
+		instJS_MC_Power.Enable_Positive := 	FALSE;							
+  		instJS_MC_Power.Enable_Negative := 	FALSE;
+		instJS_MC_Power.Enable := FALSE;
+		State := 30;
+		
+	30: //Enable
+		instJS_MC_Power.Enable_Positive := 	TRUE;		(* Advance movement enable in positive direction *)									
+  		instJS_MC_Power.Enable_Negative := 	TRUE;		(* Advance movement enable in negative direction *)	
+  		instJS_MC_Power.Override	:= 100;	
+		instJS_MC_Power.Enable := TRUE;
+		IF instJS_MC_Power.Status THEN
+			State := 40;
+		ELSE
+			fbTimer(IN:= TRUE, PT:= T#1S);
+			IF fbTimer.Q THEN
+				fbTimer(IN := FALSE);
+				State := 10;
+			END_IF
+		END_IF	
+		
+	40: //Delay time
+		fbTimer(IN := TRUE, PT:= T#1S);
+		IF fbTimer.Q THEN
+			fbTimer(IN := FALSE);
+			Axis_PowerOn := TRUE;
+			bDidPowerOn := TRUE;
+			State := 0;
+		END_IF
+END_CASE
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CalculateAccl" Id="{4921d6e1-d63c-0a93-006e-936a3b0a9d6f}">
+      <Declaration><![CDATA[METHOD CalculateAccl : LREAL
+VAR_INST 
+	PrevVelo: 		LREAL;
+	CurrentVelo: 	LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+ Estimated the actual accleration based on the rate of change of velocity
+*)
+PrevVelo := CurrentVelo;
+CurrentVelo := ActVelo;
+CalculateAccl := (CurrentVelo - PrevVelo)/0.001;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Calibrate" Id="{3d0a4171-1506-0726-3c8b-5c71461ad9e2}">
+      <Declaration><![CDATA[METHOD Calibrate : BOOL
+VAR_INPUT
+	Execute	: 						BOOL;
+	StartPosition :					LREAL;	// in millimeters 
+	EndPosition:					LREAL; // in millimeters 
+	ZeroPreviousForceData:			BOOL;
+END_VAR
+
+VAR_INST
+	State:					INT;
+	rtrigExecute:			R_TRIG;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE State OF
+	0: 	// Execute
+		rtrigExecute(CLK := Execute);
+		IF rtrigExecute.Q THEN
+			Calibrate := FALSE;
+			bBusy := TRUE;
+			State := 10;
+		END_IF
+	10: // Calibrate to start and end positions 
+		instJS_MC_ForceCalibration.IterativeFcDisable := ZeroPreviousForceData;
+		instJS_MC_ForceCalibration.StartPosition := LREAL_TO_DINT(StartPosition*1000);
+		instJS_MC_ForceCalibration.EndPosition := LREAL_TO_DINT(EndPosition*1000);
+		instJS_MC_ForceCalibration.Execute := TRUE;	
+		State := 20;
+	20:
+		IF instJS_MC_ForceCalibration.Done THEN
+			instJS_MC_ForceCalibration.Execute := FALSE;
+			Reset(Execute := FALSE);
+			State := 30;
+		END_IF
+	30: // reset 
+		IF Reset(Execute := TRUE) THEN
+			Reset(Execute := FALSE);
+			Calibrate := TRUE;
+			bBusy := FALSE;
+			State := 0;
+		END_IF 
+END_CASE
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CyclicComm" Id="{9deb1af0-ef82-099a-3b3b-b0e39bc2775e}">
+      <Declaration><![CDATA[METHOD CyclicComm
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+	This method proves the cyclic communication for all Twincat motion function blocks and the removal of function blocks used from the JS_Mc_Lib
+*)
+fbMoveAbs1(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+fbMoveAbs2(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+fbMoveAbs3(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+fbHalt(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+//fbStop(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+fbReset(Axis := instJS_MC_Init.pstAxis^.AxisRef);
+fbJog(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+fbMoveRel(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+fbMoveVelo(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+fbMoveModulo(Axis:= instJS_MC_Init.pstAxis^.AxisRef);
+
+bError := instJS_MC_ReadAxisError.AxisError;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="ForceAtFailure" Id="{de4f0d16-c80d-0686-291e-989afa2a8885}">
+      <Declaration><![CDATA[PROPERTY ForceAtFailure  : lreal]]></Declaration>
+      <Get Name="Get" Id="{da6faea0-e2f5-0fb1-29c9-ea802287cb93}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ForceAtFailure := GetForceAtFailure;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Initialize" Id="{70d0afd1-bb75-0bdd-20eb-4f9eecd8a060}">
+      <Declaration><![CDATA[METHOD Initialize : BOOL
+VAR_INPUT
+	Execute:				BOOL;
+END_VAR
+VAR_INST
+	InitState:				INT;
+	rtrigInit :				R_TRIG;
+	fbTimer:				TON;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE InitState OF
+	0: 	// Execute
+		rtrigInit(CLK := Execute);
+		IF rtrigInit.Q THEN
+			Initialize := FALSE;
+			bDidInitialize := FALSE;
+			bBusy := TRUE;
+			InitState := 10;
+		END_IF
+	10: //Power on 
+		IF Axis_PowerOn(TRUE) THEN
+			Axis_PowerOn(FALSE);
+			InitState:= 15;
+		END_IF
+		
+	15: IF instJS_MC_Power.Status THEN
+			InitState := 20;
+		ELSE
+			IF Axis_PowerOff(TRUE) THEN
+				Axis_PowerOff(FALSE);
+				InitState := 10;
+			END_IF
+		END_IF
+		
+	20: //Reference
+		IF Ref(TRUE) THEN
+			Ref(FALSE);
+			InitState := 30;
+		END_IF
+	30:
+		Initialize := TRUE;
+		bDidInitialize := TRUE;
+		bBusy := FALSE;
+		InitState := 0;
+END_CASE
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="JsCyclicComm" Id="{40470018-8957-0375-3848-e8d18baf2afe}">
+      <Declaration><![CDATA[METHOD JsCyclicComm
+VAR_INST 
+	State:		INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(* 
+	starts the PLCopen status machine and the communication to the axis device for entering instructions of the cyclic task.
+*)
+
+IF bInit THEN 
+	instJS_MC_Init.OperationMode := gcJS_MC.jsmcMODE_CYCLIC_SYNC;
+	instJS_MC_Init();
+	bInit := instJS_MC_Init.Error;
+	instJS_MC_Reference.ReferenceMode := usiRefernceDirection; //reference direction 																			 
+	instJS_MC_ReadAxisError.Enable := TRUE;
+	instJS_MC_ReadStatus.Enable := TRUE;
+	instJS_MC_ReadPSR.Enable := TRUE;		
+END_IF
+
+IF NOT bInit THEN
+	
+	CASE State OF 
+		0: (* Check communication errors and start cyclic In/Out*)
+			IF instJS_MC_CyclicIn.Error THEN				
+				bCyclic := FALSE;
+				CommunicationError := TRUE;
+				state := 10;
+			ELSE
+				bCyclic := TRUE;
+			END_IF	
+		10: (* Communication interrupted *)
+			instJS_MC_Reset.Execute := FALSE;
+			instJS_MC_Reference.Execute := FALSE;
+			instJS_MC_Power.Enable := FALSE;
+			State := 0;
+	END_CASE
+
+	instJS_MC_CyclicIn( pstAxis := instJS_MC_Init.pstAxis, Enable := bCyclic);
+	instJS_MC_Init.pstAxis^.AxisRef.ReadStatus();
+	instJS_MC_Power(pstAxis:= instJS_MC_Init.pstAxis);
+	instJS_MC_Reference(pstAxis := instJS_MC_Init.pstAxis); 					
+    instJS_MC_ReadAxisError(pstAxis := instJS_MC_Init.pstAxis);
+    instJS_MC_ReadStatus(pstAxis := instJS_MC_Init.pstAxis); 		
+    instJS_MC_Reset(pstAxis := instJS_MC_Init.pstAxis); 					
+    instJS_MC_ForceCalibration(pstAxis := instJS_MC_Init.pstAxis);	
+    instJS_MC_ReadPSR(pstAxis := instJS_MC_Init.pstAxis);		
+	instJS_MC_CyclicOut(pstAxis := instJS_MC_Init.pstAxis);	
+END_IF 	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MaxForceReset" Id="{e6ab31f6-600e-44aa-b3c2-721e7f5a03c0}">
+      <Declaration><![CDATA[METHOD PUBLIC MaxForceReset : BOOL
+VAR_INPUT
+	Execute:			BOOL;
+END_VAR
+VAR_INST
+	State:				INT;
+	rtrigHalt:			R_TRIG;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtrigHalt(CLK := Execute);
+CASE State OF 
+	0:	//Execute
+		IF rtrigHalt.Q THEN
+			MaxForceReset := FALSE;
+			bDidHalt := FALSE;
+			State := 10;
+		END_IF
+	10:// Reset to update the actual position and confirm again all execute commands to FALSE
+		IF Reset(TRUE) THEN
+			Reset(FALSE);
+			fbHalt.Execute := FALSE;
+			fbMoveAbs1.Execute := FALSE;
+			fbMoveAbs2.Execute := FALSE;
+			fbMoveAbs3.Execute := FALSE;
+			fbMoveModulo.Execute := FALSE;
+			fbMoveRel.Execute := FALSE;
+			fbMoveVelo.Execute := FALSE; 
+			State := 20;
+		END_IF
+	20: //Done 
+		MaxForceReset := TRUE;
+		bDidHalt := TRUE;
+		State := 0;
+END_CASE ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Pause" Id="{9c6f672c-a965-0a6a-23db-64a102fc2325}">
+      <Declaration><![CDATA[METHOD Pause : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Pause := FALSE;
+instJS_MC_Power.Override := 0;
+Pause := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Ref" Id="{9de6c898-c8eb-4314-b692-c506157b4e09}">
+      <Declaration><![CDATA[METHOD Ref : BOOL
+VAR_INPUT
+	Execute:	BOOL;
+END_VAR
+VAR_INST 
+	RefState:				INT;
+	rtrigRef:				R_TRIG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE RefState OF	
+	0: //Execute 
+		rtrigRef(CLK := Execute);
+		IF rtrigRef.Q THEN
+			bDidRef := FALSE;
+			Ref := FALSE;
+			RefState := 10;
+		END_IF
+	10: //Check for previous reference 
+		IF instJS_MC_ReadPSR.ProcessStatusRegister.bReference THEN
+			RefState := 30;
+		ELSIF NOT instJS_MC_ReadPSR.ProcessStatusRegister.bReference THEN
+			instJS_MC_Reference.Execute := TRUE;
+			RefState := 20;
+		END_IF
+	20: //Wait for ref complete
+		IF instJS_MC_Reference.Done THEN
+			instJS_MC_Reference.Execute := FALSE;
+			RefState := 30;
+		END_IF
+	30: 
+		bDidRef := TRUE;
+		Ref := TRUE;
+		RefState := 0;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Resume" Id="{a0294376-7673-0670-357a-c70ce47bb5db}">
+      <Declaration><![CDATA[METHOD Resume : BOOL
+VAR_INPUT
+	ResumeOverride: LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Resume := FALSE;
+instJS_MC_Power.Override := ResumeOverride;
+Resume := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetAxisOverride" Id="{dc157723-4097-05d1-18f5-ba5b69b41bb8}">
+      <Declaration><![CDATA[METHOD SetAxisOverride
+VAR_INPUT
+	Override:				UDINT;						//Set value from 0-100%
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+	This method passes an override value to the NC 
+*)
+instJS_MC_Power.Override := Override;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_XenaxAxisForceFeedback">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.ActAccl.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.ActForce.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.ActPos.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.Axis_PowerOff">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.Axis_PowerOn">
+      <LineId Id="3" Count="52" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.CalculateAccl">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.Calibrate">
+      <LineId Id="3" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.CyclicComm">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.ForceAtFailure.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.Initialize">
+      <LineId Id="3" Count="35" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.JsCyclicComm">
+      <LineId Id="3" Count="42" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.MaxForceReset">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.Pause">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.Ref">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.Resume">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XenaxAxisForceFeedback.SetAxisOverride">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

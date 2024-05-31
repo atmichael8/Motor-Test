@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <DUT Name="ST_RECIPE_VARS" Id="{5ed26e27-921f-4935-a079-3a6dfaa5c7d5}">
+    <Declaration><![CDATA[TYPE ST_RECIPE_VARS :
+STRUCT
+	// Recipe Information
+	sRecipeName:							STRING;
+	//AFS Module Recipe GVL VARS
+	//VISION
+	lrAreaThreshold:						LREAL := 310000;
+	bSwitchSign:							BOOL;
+	TopPoint: 								REAL := 960;
+	MidPoint: 								REAL := 1225;
+	BotPoint: 								REAL := 1600;
+	
+	//Contact Load Recipe GVL VARS
+	//VISION
+	aSearchCenterPoint			: TcVnPoint2_REAL;
+	aSearchSize					: TcVnPoint2_REAL;
+	
+	aInnerPointBentPinBottom	: TcVnPoint2_REAL := [650, 550];
+	nInnerPointYCamOffsetBottom	: INT := 100;
+	aOuterPoint1BentPinBottom	: TcVnPoint2_REAL := [200, 550];
+	nOuterPoint1YCamOffsetBottom: INT := 100;
+	aOuterPoint2BentPinBottom	: TcVnPoint2_REAL := [650, 100];
+	nOuterPoint2YCamOffsetBottom: INT := 100;
+	aOuterPoint3BentPinBottom	: TcVnPoint2_REAL := [200, 100];
+	nOuterPoint3YCamOffsetBottom: INT := 100;
+	aInnerPointEndEffector		: TcVnPoint2_REAL := [800, 470];
+	aOuterPoint1EndEffector		: TcVnPoint2_REAL := [200, 470];
+	aOuterPoint2EndEffector		: TcVnPoint2_REAL := [800, 100];
+	aOuterPoint3EndEffector		: TcVnPoint2_REAL := [200, 100];
+	nCamOffsetx					: INT := 72;
+	nCamOffsetY					: INT := 12;
+	lrBrightnessSensitivy		: LREAL := 16;
+	nNumOfHolesThatCanMiss		: INT := 5;
+	
+	//Pick and Place Recipe Vars
+	nNumOfHoles					: INT := 26;
+	nRowCount					: INT := 5;
+	nNumofShells				: INT := 25;
+	lrPnPPreInsertionPos		: LREAL := 78.0;
+	lrPnPFinalInsertionPos		: LREAL := 89.719; // Ideal for 26 contact Shell: 89.719;
+	lrLocateHolesPos			: LREAL := 77.839;
+	nCalibrationImageNum		: INT := 0;
+	lrHandoffPosition			: LREAL := 79.5;
+	lrInsertionForceThreshold	: LREAL := 1.5;
+	lrInsertionStopForce		: LREAL := 0.29;
+	lrPinToShoulderLength		: LREAL;
+	//Pallet Recipe Vars
+	nColumnCount				: INT := 5;
+	nPresetPalletNum			: INT := 0;
+
+END_STRUCT
+
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
